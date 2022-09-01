@@ -1,3 +1,4 @@
+
 /0726_results
 /0728_results
 /0728_results2
@@ -28,7 +29,6 @@
 /KNN_result_0812.csv
 /KNN_result_0812.xlsx
 /logs
-/Model
 /MV_result_0714.csv
 /MV_result_0715.csv
 /MV_result_0715.xlsx
@@ -37,7 +37,6 @@
 /test
 /two_stage_result_0719.csv
 /two_stage_result_0719.xlsx
-/utils.py
 /weighted_MV_result_0718.csv
 /weighted_MV_result_0718.xlsx
 /without_normalization.csv
@@ -45,3 +44,15 @@
 /wrong_normalization.csv
 /wrong_normalization.xlsx
 /__pycache__
+!Model/
+Model/*
+!/Model/common_model.py
+!/Model/common_model.py
+!/Model/embed.py
+!/Model/MLP_mixer.py
+!Data/
+Data/*
+!/Data/input_sample.npy
+!/Data/output_sample.npy
+!/Data/saved_model.ckpt
+!/Data/all_scalers.pkl
