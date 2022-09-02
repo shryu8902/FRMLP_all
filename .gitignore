@@ -50,6 +50,7 @@ Model/*
 !/Model/common_model.py
 !/Model/embed.py
 !/Model/MLP_mixer.py
+!/Model/TCN.py
 !Data/
 Data/*
 !/Data/input_sample.npy
