@@ -57,3 +57,4 @@ Data/*
 !/Data/output_sample.npy
 !/Data/saved_model.ckpt
 !/Data/all_scalers.pkl
+!/Data/Raw_csv.csv
