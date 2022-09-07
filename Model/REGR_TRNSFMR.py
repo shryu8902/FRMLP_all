@@ -90,7 +90,7 @@ class AR_TRANSFMR(LTS_model):
             losses.append(self.loss_weight[i]*loss_func(y_diff_u, y_diff, 0.9))
 
         # loss = torch.stack(losses).sum()
-        student_x = x.detach().clone()
+        student_x = x.detach().clone().requires_grad()
         for j in range(self.out_len):
             temp_out, _ = self(student_x[:,:(j+1),:]
             student_x[:,j+1,-self.n_out:] = temp_out[:,-1,:].detach().unsqueeze(1)]
