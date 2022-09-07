@@ -50,6 +50,7 @@ Model/*
 !/Model/common_model.py
 !/Model/embed.py
 !/Model/MLP_mixer.py
+!/Model/REGR_TRNSFMR.py
 !/Model/TCN.py
 !Data/
 Data/*
@@ -58,3 +59,7 @@ Data/*
 !/Data/saved_model.ckpt
 !/Data/all_scalers.pkl
 !/Data/Raw_csv.csv
+/HYPE_ALL
+/lightning_logs
+/IMAGES
+/EXP2
