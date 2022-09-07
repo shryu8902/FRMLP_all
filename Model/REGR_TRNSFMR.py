@@ -68,6 +68,7 @@ class AR_TRANSFMR(LTS_model):
         return y_preds, (y_pred_ls,y_pred_us)
 
     def training_step(self, batch, batch_idx):
+        # teacher forcing loop
         x, y = batch
         y_hats, (y_hat_ls,y_hat_us) = self(x)
 
@@ -88,6 +89,29 @@ class AR_TRANSFMR(LTS_model):
             losses.append(self.loss_weight[i]*loss_func(y_diff_m, y_diff, 0.5))
             losses.append(self.loss_weight[i]*loss_func(y_diff_u, y_diff, 0.9))
 
+        # loss = torch.stack(losses).sum()
+        student_x = x.detach().clone()
+        for j in range(self.out_len):
+            temp_out, _ = self(student_x[:,:(j+1),:]
+            student_x[:,j+1,-self.n_out:] = temp_out[:,-1,:].detach().unsqueeze(1)]
+
+        yst_hats, (yst_hat_ls,yst_hat_us) = self(student_x)
+
+        for i in range(self.n_out):
+            # recon pinball loss
+            losses.append(self.loss_weight[i]*loss_func(yst_hat_ls[...,i], y[...,i], 0.1)) 
+            losses.append(self.loss_weight[i]*loss_func(yst_hats[...,i], y[...,i], 0.5)) 
+            losses.append(self.loss_weight[i]*loss_func(yst_hat_us[...,i], y[...,i], 0.9)) 
+
+            # differntial loss 
+            yst_diff_l = torch.diff(yst_hat_ls[...,i])
+            yst_diff_u = torch.diff(yst_hat_us[...,i])
+            yst_diff_m = torch.diff(yst_hats[...,i])
+            y_diff = torch.diff(y[...,i])
+            losses.append(self.loss_weight[i]*loss_func(yst_diff_l, y_diff, 0.1))
+            losses.append(self.loss_weight[i]*loss_func(yst_diff_m, y_diff, 0.5))
+            losses.append(self.loss_weight[i]*loss_func(yst_diff_u, y_diff, 0.9))
+
         loss = torch.stack(losses).sum()
 
         self.log('train_loss', loss)
@@ -99,7 +123,7 @@ class AR_TRANSFMR(LTS_model):
 
         losses = []
         loss_func = PinballLoss()
-        for i in range(4):
+        for i in range(self.n_out):
             # recon pinball loss
             losses.append(self.loss_weight[i]*loss_func(y_hat_ls[...,i], y[...,i], 0.1)) 
             losses.append(self.loss_weight[i]*loss_func(y_hats[...,i], y[...,i], 0.5)) 
@@ -118,7 +142,7 @@ class AR_TRANSFMR(LTS_model):
         loss = torch.stack(losses).sum()
         self.log('val_loss', loss)
         return loss
-
+#%%
 class TRANSFORMER(LTS_model):
     def __init__(self, c_in, d_model, n_layers = 3, window = 168, out_len = 24, latent_window= 7,  hdim = 128, n_head=8, dr_rates = 0.2, use_time_feature=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
