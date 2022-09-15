@@ -113,6 +113,7 @@ df_smape.describe()
 
 mse = ((DENORM_Y_HAT - DENORM_Y_TRUE)**2).mean(axis=-2)
 df_mse = pd.DataFrame(mse, columns = data_variables)
+df_mse.describe()
 
 mape = abs((DENORM_Y_HAT - DENORM_Y_TRUE)/(DENORM_Y_TRUE)).mean(axis=1)*100
 df_mape = pd.DataFrame(mape, columns = data_variables)
@@ -126,7 +127,7 @@ df_drop_mape.describe()
 
 nmape = abs((DENORM_Y_HAT - DENORM_Y_TRUE)/(DENORM_Y_TRUE.mean(axis=1)[:,np.newaxis,:])).mean(axis=-2)*100
 df_nmape = pd.DataFrame(nmape, columns = data_variables)
-df_smape.describe()
+df_nmape.describe()
 
 
 np.where(df_smape['PEX0(3)']==df_smape['PEX0(3)'].median())

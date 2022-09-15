@@ -14,7 +14,7 @@ from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks.model_checkpoint import ModelCheckpoint
 
 from Model.MLP_mixer import Q_CONV_MIXER
-from Model.CONV_MIXER import Q_CONV_MIXER_all
+from Model.CONV_MIXER import Q_CONV_MIXER_all, Q_CONV_MIXER_all_reslink
 # from Model.FNN import FNN, LSTM
 
 import gc
@@ -47,7 +47,8 @@ for i, target in enumerate(data_variables):
     temp.append(b.reshape(-1,1000,1))
 np_scaled_outputs = np.concatenate(temp,axis=-1)
 #%%
-params = {'Hype-Q-CONV-MIXER':{'d':256, 'n':2, 'h':128, 'lr':0.001, 'd_emb':32}}
+# params = {'Hype-Q-CONV-MIXER':{'d':256, 'n':2, 'h':128, 'lr':0.001, 'd_emb':32}}
+params = {'Hype-Q-CONV-MIXER-res':{'d':256, 'n':2, 'h':128, 'lr':0.001, 'd_emb':32}}
 C_IN = 48
 OUT_LEN = 333
 EPOCH = 200
@@ -74,7 +75,9 @@ for R_SEED, (tr_ind, te_ind) in enumerate(skf.split(range(len(np_scaled_inputs))
     y_te = np.concatenate([outp_test[:,::3,:][:,:-1,:],outp_test[:,1::3,:], outp_test[:,2::3,:]])
 
     for tr_seed in range(5):
-        for model_name in ['Hype-Q-CONV-MIXER']:
+        # for model_name in ['Hype-Q-CONV-MIXER']:
+        for model_name in ['Hype-Q-CONV-MIXER-res']:
+
             utils.seed_everything(tr_seed)
 
             '''
@@ -90,7 +93,7 @@ for R_SEED, (tr_ind, te_ind) in enumerate(skf.split(range(len(np_scaled_inputs))
             loader_test = DataLoader(test, batch_size= BATCH, shuffle = False)
 
             #Prepare model
-            current_model = Q_CONV_MIXER_all(c_in = C_IN, d_model = params[model_name]['d'], d_emb = params[model_name]['d_emb'],
+            current_model =Q_CONV_MIXER_all_reslink(c_in = C_IN, d_model = params[model_name]['d'], d_emb = params[model_name]['d_emb'],
             out_len = OUT_LEN, n_layers = params[model_name]['n'], token_hdim = params[model_name]['h'], loss_weight=[1,1,1,1,1,1,1],
             ch_hdim = params[model_name]['h'], dr_rates = 0.2, use_lr_scheduler = True, lr =params[model_name]['lr'])
 
@@ -101,7 +104,7 @@ for R_SEED, (tr_ind, te_ind) in enumerate(skf.split(range(len(np_scaled_inputs))
             trainer.fit(current_model, loader_train, loader_val)
 
 
-            loaded_model = Q_CONV_MIXER_all.load_from_checkpoint(checkpoint_path = checkpoint_callback.best_model_path, 
+            loaded_model = Q_CONV_MIXER_all_reslink.load_from_checkpoint(checkpoint_path = checkpoint_callback.best_model_path, 
                                         c_in = C_IN, d_model = params[model_name]['d'],d_emb = params[model_name]['d_emb'],
             out_len = OUT_LEN, n_layers = params[model_name]['n'], token_hdim = params[model_name]['h'],loss_weight=[1,1,1,1,1,1,1],
             ch_hdim = params[model_name]['h'], dr_rates = 0.2, use_lr_scheduler = True, lr =params[model_name]['lr'])
@@ -137,5 +140,5 @@ for R_SEED, (tr_ind, te_ind) in enumerate(skf.split(range(len(np_scaled_inputs))
     gc.collect()
     torch.cuda.empty_cache()
 df_results = pd.DataFrame.from_dict(results)
-df_results.to_csv('./result_new_data.csv') #loss weight 0.5,0.3, 0.1,0.1
+df_results.to_csv('./res_Q_result_new_data.csv') #loss weight 0.5,0.3, 0.1,0.1
 

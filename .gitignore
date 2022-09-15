@@ -52,6 +52,7 @@ Model/*
 !/Model/MLP_mixer.py
 !/Model/REGR_TRNSFMR.py
 !/Model/TCN.py
+!/Model/CONV_MIXER.py
 !Data/
 Data/*
 !/Data/input_sample.npy

@@ -70,6 +70,7 @@ class AR_TRANSFMR(LTS_model):
     def training_step(self, batch, batch_idx):
         # teacher forcing loop
         x, y = batch
+        student_x = x.detach().clone()
         y_hats, (y_hat_ls,y_hat_us) = self(x)
 
         losses = []
@@ -89,11 +90,130 @@ class AR_TRANSFMR(LTS_model):
             losses.append(self.loss_weight[i]*loss_func(y_diff_m, y_diff, 0.5))
             losses.append(self.loss_weight[i]*loss_func(y_diff_u, y_diff, 0.9))
 
-        # loss = torch.stack(losses).sum()
-        student_x = x.detach().clone().requires_grad()
+        # for j in range(self.out_len):
+        #     temp_out, _ = self(student_x[:,:(j+1),:])
+        #     student_x[:,j+1,-self.n_out:] = temp_out[:,-1,:].detach()
+
+        # yst_hats, (yst_hat_ls,yst_hat_us) = self(student_x)
+
+        # for i in range(self.n_out):
+        #     # recon pinball loss
+        #     losses.append(self.loss_weight[i]*loss_func(yst_hat_ls[...,i], y[...,i], 0.1)) 
+        #     losses.append(self.loss_weight[i]*loss_func(yst_hats[...,i], y[...,i], 0.5)) 
+        #     losses.append(self.loss_weight[i]*loss_func(yst_hat_us[...,i], y[...,i], 0.9)) 
+
+        #     # differntial loss 
+        #     yst_diff_l = torch.diff(yst_hat_ls[...,i])
+        #     yst_diff_u = torch.diff(yst_hat_us[...,i])
+        #     yst_diff_m = torch.diff(yst_hats[...,i])
+        #     y_diff = torch.diff(y[...,i])
+        #     losses.append(self.loss_weight[i]*loss_func(yst_diff_l, y_diff, 0.1))
+        #     losses.append(self.loss_weight[i]*loss_func(yst_diff_m, y_diff, 0.5))
+        #     losses.append(self.loss_weight[i]*loss_func(yst_diff_u, y_diff, 0.9))
+
+        loss = torch.stack(losses).sum()
+
+        self.log('train_loss', loss)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        x, y = batch
+        y_hats, (y_hat_ls,y_hat_us) = self(x)
+
+        losses = []
+        loss_func = PinballLoss()
+        for i in range(self.n_out):
+            # recon pinball loss
+            losses.append(self.loss_weight[i]*loss_func(y_hat_ls[...,i], y[...,i], 0.1)) 
+            losses.append(self.loss_weight[i]*loss_func(y_hats[...,i], y[...,i], 0.5)) 
+            losses.append(self.loss_weight[i]*loss_func(y_hat_us[...,i], y[...,i], 0.9)) 
+
+            # differntial loss 
+            y_diff_l = torch.diff(y_hat_ls[...,i])
+            y_diff_u = torch.diff(y_hat_us[...,i])
+            y_diff_m = torch.diff(y_hats[...,i])
+            y_diff = torch.diff(y[...,i])
+            losses.append(self.loss_weight[i]*loss_func(y_diff_l, y_diff, 0.1))
+            losses.append(self.loss_weight[i]*loss_func(y_diff_m, y_diff, 0.5))
+            losses.append(self.loss_weight[i]*loss_func(y_diff_u, y_diff, 0.9))
+
+
+        loss = torch.stack(losses).sum()
+        self.log('val_loss', loss)
+        return loss
+# %%
+class AR_TRANSFMR_V2(LTS_model):
+    def __init__(self, c_in, d_model, d_emb, n_out, out_len = 333, n_layers = 5, n_head = 8, dr_rates = 0.2, loss_weight = [1,1,1,1], *args, **kwargs ):
+        super().__init__(*args, **kwargs)
+        self.d_model = d_model
+        self.c_in = c_in
+        self.out_len = out_len #maximum output length
+        self.n_layers = n_layers
+        self.dr_rates = dr_rates
+        self.n_head = n_head
+        self.d_model = d_model
+        self.d_emb = d_emb
+        self.n_out = n_out
+        self.input_embedding = SeperateDataEmbedding_V2(c_in, d_model, d_emb = d_emb)
+        self.d_lat = self.input_embedding.d_lat
+        self.loss_weight = loss_weight
+
+        assert self.d_lat%8 ==0, 'd_lat cannot be divided by num_heads'
+
+        self.main_layers = nn.ModuleList([])
+        for _ in range(n_layers):
+            self.main_layers.append(nn.TransformerDecoderLayer(d_model = self.d_lat, nhead = self.n_head, batch_first = True,dropout=self.dr_rates))
+        self.arrange1 = Rearrange('b d n -> b n d')
+        self.mlp_head = nn.Linear(self.d_lat, self.n_out)
+        self.mlp_head_u = nn.Linear(self.d_lat, self.n_out)
+        self.mlp_head_l = nn.Linear(self.d_lat, self.n_out)
+
+    @staticmethod
+    def _generate_square_subsequent_mask(sz):
+        mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
+        mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
+        return mask
+
+    def forward(self, x):
+        #x  # [b, n, d]
+        # print(x.shape[1])
+        lookahead = self._generate_square_subsequent_mask(x.shape[1])
+        x = self.input_embedding(x)
+        lookahead = lookahead.to(x.device)
+        for decoder_layer in self.main_layers:
+            x = decoder_layer(tgt = x, memory = x, tgt_mask = lookahead, memory_mask = lookahead)
+        y_preds = self.mlp_head(x)
+        y_pred_us = self.mlp_head_u(x)
+        y_pred_ls = self.mlp_head_l(x)
+
+        return y_preds, (y_pred_ls,y_pred_us)
+
+    def training_step(self, batch, batch_idx):
+        # teacher forcing loop
+        x, y = batch
+        student_x = x.detach().clone()
+        y_hats, (y_hat_ls,y_hat_us) = self(x)
+
+        losses = []
+        loss_func = PinballLoss()
+        for i in range(self.n_out):
+            # recon pinball loss
+            losses.append(self.loss_weight[i]*loss_func(y_hat_ls[...,i], y[...,i], 0.1)) 
+            losses.append(self.loss_weight[i]*loss_func(y_hats[...,i], y[...,i], 0.5)) 
+            losses.append(self.loss_weight[i]*loss_func(y_hat_us[...,i], y[...,i], 0.9)) 
+
+            # differntial loss 
+            y_diff_l = torch.diff(y_hat_ls[...,i])
+            y_diff_u = torch.diff(y_hat_us[...,i])
+            y_diff_m = torch.diff(y_hats[...,i])
+            y_diff = torch.diff(y[...,i])
+            losses.append(self.loss_weight[i]*loss_func(y_diff_l, y_diff, 0.1))
+            losses.append(self.loss_weight[i]*loss_func(y_diff_m, y_diff, 0.5))
+            losses.append(self.loss_weight[i]*loss_func(y_diff_u, y_diff, 0.9))
+
         for j in range(self.out_len):
-            temp_out, _ = self(student_x[:,:(j+1),:]
-            student_x[:,j+1,-self.n_out:] = temp_out[:,-1,:].detach().unsqueeze(1)]
+            temp_out, _ = self(student_x[:,:(j+1),:])
+            student_x[:,j+1,-self.n_out:] = temp_out[:,-1,:].detach()
 
         yst_hats, (yst_hat_ls,yst_hat_us) = self(student_x)
 
